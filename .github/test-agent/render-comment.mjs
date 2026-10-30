@@ -25,6 +25,8 @@ const rows = results.map(({ project, r }) => !r
   : `| ${project} | ${r.ok ? '✅' : '❌'} | ${r.tests ? `${r.tests.passed}/${r.tests.total}` : 'n/a'} | ${pct(r.coverage?.statements)} | ${pct(r.coverage?.branches)} | ${pct(r.coverage?.functions)} | ${pct(r.coverage?.lines)} |`);
 const failures = results.flatMap(({ r }) => r?.failures ?? []).slice(0, 10)
   .map((f) => `- \`${f.file}\` › ${f.test}\n  \`\`\`\n  ${f.message.split('\n').slice(0, 6).join('\n  ')}\n  \`\`\``);
+const typeErrors = results.filter(({ r }) => r?.typecheck && !r.typecheck.ok)
+  .map(({ project, r }) => `**${project} typecheck failed**\n\`\`\`\n${r.typecheck.errors}\n\`\`\``);
 const logs = results.filter(({ r }) => r?.log).map(({ project, r }) => `<details><summary>${project} log</summary>\n\n\`\`\`\n${r.log}\n\`\`\`\n</details>`);
 
 // The report is LLM output: neutralize @mentions so it can never ping people.
@@ -36,10 +38,11 @@ const body = [
   verdict,
   '',
   '### Verified by CI (independent of the agent)',
-  '| Project | Result | Tests | Statements | Branches | Functions | Lines |',
+  '| Project | Tests + typecheck | Tests | Statements | Branches | Functions | Lines |',
   '|---|---|---|---|---|---|---|',
   ...rows,
   ...(failures.length ? ['', '**Failures**', ...failures] : []),
+  ...typeErrors,
   ...logs,
   '',
   `**Changed by the agent:** ${files.length ? files.map((f) => `\`${f.replace('\t', ' ')}\``).join(', ') : 'nothing'}`,

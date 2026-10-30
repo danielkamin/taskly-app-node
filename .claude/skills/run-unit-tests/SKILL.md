@@ -19,6 +19,7 @@ Paths are relative to the repository root. Output (stdout, exit 0 = all green):
   "tests": { "total": 52, "passed": 52, "failed": 0 },
   "failures": [ { "file": "tests/x.test.ts", "test": "name", "message": "..." } ],
   "coverage": { "statements": 81.2, "branches": 75, "functions": 90, "lines": 82.4 },
+  "typecheck": { "ok": true, "errors": "full-suite only: tsc --noEmit output, first 20 lines" },
   "log": "present only when it failed without failed tests (threshold, crash, timeout)" }
 ```
 
@@ -29,6 +30,6 @@ Paths are relative to the repository root. Output (stdout, exit 0 = all green):
    - **The test is wrong** (bad query, wrong mock, wrong expectation about existing behaviour) → fix the test and rerun.
    - **The source is wrong** (the test encodes the documented/obvious intent and the code violates it) → do **not** change source and do **not** weaken the assertion to make it pass. Remove that one case, keep the rest, and report the suspected bug with the assertion that failed.
 3. At most **3 fix attempts per file**. After that, revert your changes to that file (`git checkout -- <file>`, or `rm <file>` if you created it) and report it as "could not stabilise".
-4. When all targeted runs pass, run the **full suite** for each project you touched. It must pass, including coverage thresholds. Record the coverage numbers for the report.
+4. When all targeted runs pass, run the **full suite** for each project you touched. It must pass, including coverage thresholds and `typecheck` (vitest does not check types, so an outdated fixture only shows up here; fix it in the fixture file). Record the coverage numbers for the report.
 
 Never report a test as passing unless this script returned `"ok": true` for it in this session.

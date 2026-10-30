@@ -59,8 +59,14 @@ if (coverage) {
       .sort((a, b) => a.lines - b.lines || a.branches - b.branches);
   }
 }
+if (coverage) {
+  // Vitest strips types without checking them; a test that passes can still break `tsc` (e.g. an outdated fixture).
+  const tsc = spawnSync(process.execPath, [path.join(projectDir, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', '.'], { cwd: projectDir, encoding: 'utf8', timeout: 300_000 });
+  result.typecheck = { ok: tsc.status === 0, errors: trim(tsc.stdout.split('\n').filter(Boolean).slice(0, 20).join('\n')) };
+  if (!result.typecheck.ok) result.ok = false;
+}
 // Non-zero exit without failed tests = threshold breach, timeout or crash: surface the log tail.
-if (!result.ok && !result.failures.length) result.log = trim(`${run.stdout}\n${run.stderr}`.trim().split('\n').slice(-40).join('\n'));
+if (run.status !== 0 && !result.failures.length) result.log = trim(`${run.stdout}\n${run.stderr}`.trim().split('\n').slice(-40).join('\n'));
 
 console.log(JSON.stringify(result, null, 2));
 process.exit(result.ok ? 0 : 1);
