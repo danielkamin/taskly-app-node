@@ -1,0 +1,265 @@
+# Creates/updates unit tests for code changed in a pull request using the test-engineer agent.
+#
+# Privilege separation, one concern per job:
+#   analyze  read-only, no secrets   deterministic diff analysis, gates the (paid) agent run
+#   agent    read-only, LLM secret   runs Claude Code; output is a patch artifact, it cannot push
+#   verify   read-only, no secrets   validates the patch (test files only) and runs both suites
+#   publish  write token, no secrets commits the verified patch and posts the sticky comment;
+#                                    runs no code from the PR
+# Agent config (.claude/, .github/test-agent/) is always taken from the base branch,
+# so a PR cannot loosen the agent's rules or permissions for its own run.
+name: PR test agent
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths: ['backend/**', 'frontend/**']
+
+permissions: {}
+
+concurrency:
+  group: pr-test-agent-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  BASE_REF: ${{ github.base_ref }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  CLAUDE_CODE_VERSION: 2.1.308
+
+jobs:
+  analyze:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.changes.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use agent config from the base branch
+        run: git restore --source "origin/$BASE_REF" --worktree -- .claude .github/test-agent
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Find changed sources
+        id: changes
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          node .claude/skills/analyze-pr-changes/scripts/changed-sources.mjs "origin/$BASE_REF" | tee changes.json
+          should_run=$(node -p "require('./changes.json').shouldRun")
+          if [[ "$(git log -1 --format=%s HEAD)" == *"[test-agent]"* ]]; then
+            echo "::notice::Last commit was made by the test agent; skipping to avoid a loop."
+            should_run=false
+          fi
+          if [[ "$HEAD_REPO" != "$THIS_REPO" ]]; then
+            echo "::notice::Fork PRs get no secrets; the agent does not run. Regular CI still tests them."
+            should_run=false
+          fi
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+
+  agent:
+    needs: analyze
+    if: needs.analyze.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      outcome: ${{ steps.agent.outcome }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use agent config from the base branch
+        run: git restore --source "origin/$BASE_REF" --worktree -- .claude .github/test-agent
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install dependencies (no dependency lifecycle scripts)
+        run: |
+          (cd backend && npm ci --ignore-scripts --no-audit --no-fund && npm run db:generate)
+          (cd frontend && npm ci --ignore-scripts --no-audit --no-fund)
+      - name: Install Claude Code (pinned)
+        run: npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
+      - name: Run test-engineer agent
+        id: agent
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          [ -n "$ANTHROPIC_API_KEY" ] || unset ANTHROPIC_API_KEY
+          [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] || unset CLAUDE_CODE_OAUTH_TOKEN
+          if [ -z "${ANTHROPIC_API_KEY:-}${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+            echo "::error::Add the ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN repository secret."
+            exit 1
+          fi
+          mkdir -p .test-agent
+          # The PR title/body are deliberately not passed to the agent: less untrusted input.
+          claude -p "PR mode. Base ref: origin/$BASE_REF. Create or update unit tests for the code changed in this branch, verify them, and write .test-agent/report.md." \
+            --agent test-engineer \
+            --model sonnet \
+            --settings .github/test-agent/settings.json \
+            --setting-sources project \
+            --permission-mode dontAsk \
+            --max-budget-usd 5 \
+            --output-format stream-json --verbose > .test-agent/session.jsonl
+      - name: Collect agent changes as a patch
+        if: always()
+        run: |
+          git restore --source HEAD --worktree -- .claude .github/test-agent
+          git clean -fdq -- .claude .github/test-agent
+          git add -A
+          git diff --cached --binary > .test-agent/agent.patch
+          git diff --cached --name-status
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: test-agent-output
+          path: .test-agent/
+          include-hidden-files: true
+          retention-days: 7
+
+  verify:
+    needs: agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      patch_status: ${{ steps.patch.outputs.status }}
+      tests_ok: ${{ steps.tests.outputs.ok }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use agent config from the base branch
+        run: git restore --source "origin/$BASE_REF" --worktree -- .claude .github/test-agent
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: test-agent-output
+          path: ${{ runner.temp }}/agent
+      - name: Apply and validate the agent patch
+        id: patch
+        run: |
+          mkdir -p "$RUNNER_TEMP/results"
+          patch="$RUNNER_TEMP/agent/agent.patch"
+          if [ ! -s "$patch" ]; then
+            status=none
+          elif bash .github/test-agent/check-patch.sh "$patch"; then
+            status=applied
+          else
+            status=rejected
+            git reset -q --hard HEAD
+            git restore --source "origin/$BASE_REF" --worktree -- .claude .github/test-agent
+          fi
+          git diff --cached --name-status --no-renames > "$RUNNER_TEMP/results/files.txt"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install dependencies (no dependency lifecycle scripts)
+        run: |
+          (cd backend && npm ci --ignore-scripts --no-audit --no-fund && npm run db:generate)
+          (cd frontend && npm ci --ignore-scripts --no-audit --no-fund)
+      - name: Run both test suites with coverage
+        id: tests
+        run: |
+          ok=true
+          for project in backend frontend; do
+            node .claude/skills/run-unit-tests/scripts/run-tests.mjs "$project" > "$RUNNER_TEMP/results/$project.json" || ok=false
+          done
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+      - name: Render report
+        if: always()
+        env:
+          AGENT_DIR: ${{ runner.temp }}/agent
+          RESULTS_DIR: ${{ runner.temp }}/results
+          PATCH_STATUS: ${{ steps.patch.outputs.status }}
+          AGENT_OUTCOME: ${{ needs.agent.outputs.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node .github/test-agent/render-comment.mjs > "$RUNNER_TEMP/results/comment.md"
+          cat "$RUNNER_TEMP/results/comment.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: test-agent-result
+          path: ${{ runner.temp }}/results/
+          retention-days: 7
+      - name: Fail on rejected patch or failing tests
+        if: steps.patch.outputs.status == 'rejected' || steps.tests.outputs.ok != 'true'
+        run: exit 1
+
+  publish:
+    needs: [agent, verify]
+    if: ${{ always() && needs.agent.result == 'success' && (needs.verify.result == 'success' || needs.verify.result == 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_REF: ${{ github.head_ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use agent config from the base branch
+        run: git restore --source "origin/$BASE_REF" --worktree -- .github/test-agent
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: test-agent-output
+          path: ${{ runner.temp }}/agent
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: test-agent-result
+          path: ${{ runner.temp }}/results
+      - name: Commit verified tests to the PR branch
+        if: needs.verify.outputs.patch_status == 'applied' && needs.verify.outputs.tests_ok == 'true'
+        run: |
+          comment="$RUNNER_TEMP/results/comment.md"
+          # Re-validate: this job holds the write token, so it trusts nothing it did not check itself.
+          bash .github/test-agent/check-patch.sh "$RUNNER_TEMP/agent/agent.patch"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "test: create/update unit tests for #$PR [test-agent]"
+          # Plain (non-force) push: if the branch moved meanwhile, the push fails instead of clobbering it.
+          if git push -q "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${HEAD_REF}"; then
+            printf '\n**Committed:** %s\n' "$(git rev-parse --short HEAD)" >> "$comment"
+          else
+            printf '\n⚠️ Push failed (the branch probably moved). The patch is in the `test-agent-output` artifact.\n' >> "$comment"
+          fi
+      - name: Post or update the sticky PR comment
+        run: |
+          marker='<!-- test-agent-report -->'
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | tail -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F "body=@$RUNNER_TEMP/results/comment.md" > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/results/comment.md"
+          fi
