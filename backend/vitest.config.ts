@@ -12,6 +12,7 @@ export default defineConfig({
       reportsDirectory: 'coverage',
       thresholds: {
         perFile: true,
+        statements: 80, branches: 50, functions: 80, lines: 80,
         'src/features/todos/{validators,mappers}.ts': {
           statements: 100, branches: 100, functions: 100, lines: 100,
         },
