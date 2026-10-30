@@ -40,6 +40,18 @@ export function TodosPage() {
       // Display the mutation error in the page alert.
     }
   }
+  async function togglePin(todo: Todo) {
+    if (busy) return
+    try {
+      const saved = await toggleTodo.mutateAsync({
+        id: todo.id,
+        input: { pinned: !todo.pinned },
+      })
+      notify(saved.pinned ? 'Task pinned to the top.' : 'Task unpinned.')
+    } catch {
+      // Display the mutation error in the page alert.
+    }
+  }
   async function retry() {
     toggleTodo.reset()
     await todosQuery.refetch()
@@ -80,6 +92,7 @@ export function TodosPage() {
           busy={busy}
           onCreate={() => setEditor('new')}
           onToggle={(todo) => void toggle(todo)}
+          onPin={(todo) => void togglePin(todo)}
           onEdit={setEditor}
           onDelete={setDeleting}
         />

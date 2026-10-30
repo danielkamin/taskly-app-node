@@ -11,6 +11,7 @@ interface TodoListProps {
   busy: boolean
   onCreate: () => void
   onToggle: (todo: Todo) => void
+  onPin: (todo: Todo) => void
   onEdit: (todo: Todo) => void
   onDelete: (todo: Todo) => void
 }
@@ -23,6 +24,7 @@ export function TodoList({
   busy,
   onCreate,
   onToggle,
+  onPin,
   onEdit,
   onDelete,
 }: TodoListProps) {
@@ -45,6 +47,7 @@ export function TodoList({
               todo={todo}
               busy={busy}
               onToggle={() => onToggle(todo)}
+              onPin={() => onPin(todo)}
               onEdit={() => onEdit(todo)}
               onDelete={() => onDelete(todo)}
             />

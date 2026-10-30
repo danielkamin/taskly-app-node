@@ -5,7 +5,7 @@ export class TodoRepository implements TodoStore {
   constructor(private readonly database: Pick<Database, 'todo'>) {}
 
   async list(): Promise<Todo[]> {
-    const rows = await this.database.todo.findMany({ orderBy: [{ created_at: 'desc' }, { id: 'desc' }] });
+    const rows = await this.database.todo.findMany({ orderBy: [{ pinned: 'desc' }, { created_at: 'desc' }, { id: 'desc' }] });
     return rows.map(fromModel);
   }
 
@@ -28,7 +28,7 @@ export class TodoRepository implements TodoStore {
   }
 
   async update(id: number, payload: TodoUpdate): Promise<Todo | null> {
-    const allowed = ['title', 'description', 'priority', 'due_date', 'completed'];
+    const allowed = ['title', 'description', 'priority', 'due_date', 'completed', 'pinned'];
     const entries = Object.entries(payload);
     if (!entries.length || entries.some(([key]) => !allowed.includes(key))) {
       throw new Error('Invalid update fields.');
