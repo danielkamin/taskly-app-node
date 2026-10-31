@@ -24,6 +24,7 @@ it('sends only writable task fields on creation', async () => {
       priority: 'medium',
       due_date: null,
       completed: false,
+      pinned: false,
     }),
   })
 })
@@ -42,8 +43,17 @@ it('sends only writable fields when updating a task', async () => {
       priority: 'medium',
       due_date: null,
       completed: true,
+      pinned: false,
     }),
   })
+})
+
+it('sends the pinned flag in a partial update', async () => {
+  vi.mocked(request).mockResolvedValue(todoFixture)
+  await todosApi.update(7, { pinned: true })
+  expect(vi.mocked(request).mock.calls[0][1]?.body).toBe(
+    JSON.stringify({ pinned: true }),
+  )
 })
 
 it('omits unset fields from partial updates', async () => {

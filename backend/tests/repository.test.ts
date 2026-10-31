@@ -15,7 +15,13 @@ it('lists tasks in newest-first order and maps database rows', async () => {
   const { database, repository } = setup();
   const findMany = vi.spyOn(database.todo, 'findMany').mockResolvedValue([record]);
   expect(await repository.list()).toEqual([todo]);
-  expect(findMany).toHaveBeenCalledWith({ orderBy: [{ created_at: 'desc' }, { id: 'desc' }] });
+  expect(findMany).toHaveBeenCalledWith({ orderBy: [{ pinned: 'desc' }, { created_at: 'desc' }, { id: 'desc' }] });
+});
+it('updates the pinned flag', async () => {
+  const { database, repository } = setup();
+  const update = vi.spyOn(database.todo, 'updateManyAndReturn').mockResolvedValue([{ ...record, pinned: true }]);
+  expect((await repository.update(1, { pinned: true }))?.pinned).toBe(true);
+  expect(update.mock.calls[0][0].data).toMatchObject({ pinned: true });
 });
 it('gets a task by ID and handles missing tasks', async () => {
   const { database, repository } = setup();
@@ -29,7 +35,7 @@ it.each(['2026-10-15', null])('creates tasks with calendar dates and timestamps 
   const { database, repository } = setup();
   const date = due_date ? new Date(`${due_date}T00:00:00.000Z`) : null;
   const create = vi.spyOn(database.todo, 'create').mockResolvedValue({ ...record, due_date: date });
-  expect(await repository.create({ title: 'Task', description: '', priority: 'medium', completed: false, due_date }))
+  expect(await repository.create({ title: 'Task', description: '', priority: 'medium', completed: false, pinned: false, due_date }))
     .toEqual({ ...todo, due_date });
   const data = create.mock.calls[0][0].data;
   expect(data).toMatchObject({ title: 'Task', due_date: date });

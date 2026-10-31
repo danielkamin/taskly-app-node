@@ -14,6 +14,7 @@ const base: Todo = {
   description: '',
   priority: 'medium',
   completed: false,
+  pinned: false,
   due_date: null,
   created_at: '2026-10-01T12:00:00Z',
   updated_at: '2026-10-01T12:00:00Z',
@@ -64,6 +65,30 @@ describe('selectTodos', () => {
     ])
   })
 
+  it.each(['newest', 'priority', 'due'] as const)(
+    'keeps pinned tasks on top when sorting by %s',
+    (sort) => {
+      const pinned = {
+        ...base,
+        id: 1,
+        pinned: true,
+        priority: 'low' as const,
+        due_date: '2030-01-01',
+        created_at: '2020-01-01T00:00:00Z',
+      }
+      const other = {
+        ...base,
+        id: 2,
+        priority: 'high' as const,
+        due_date: '2026-10-02',
+      }
+      expect(selectTodos([other, pinned], 'all', '', sort)).toEqual([
+        pinned,
+        other,
+      ])
+    },
+  )
+
   it('sorts by due date with undated tasks last', () => {
     const soon = { ...base, id: 2, due_date: '2026-10-02' }
     const later = { ...base, id: 3, due_date: '2026-12-01' }
@@ -80,6 +105,7 @@ const input: TodoInput = {
   priority: 'medium',
   due_date: null,
   completed: false,
+  pinned: false,
 }
 
 describe('validateTodo', () => {

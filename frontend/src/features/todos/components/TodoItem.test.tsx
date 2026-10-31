@@ -18,6 +18,7 @@ it('shows an active task and forwards edit requests', async () => {
       busy={false}
       onEdit={onEdit}
       onToggle={onToggle}
+      onPin={vi.fn()}
       onDelete={onDelete}
     />,
   )
@@ -34,7 +35,12 @@ it('shows an active task and forwards edit requests', async () => {
 })
 
 function setup(todo: Todo, busy = false) {
-  const callbacks = { onEdit: vi.fn(), onToggle: vi.fn(), onDelete: vi.fn() }
+  const callbacks = {
+    onEdit: vi.fn(),
+    onToggle: vi.fn(),
+    onPin: vi.fn(),
+    onDelete: vi.fn(),
+  }
   render(<TodoItem todo={todo} busy={busy} {...callbacks} />)
   return { ...callbacks, user: userEvent.setup() }
 }
@@ -80,8 +86,25 @@ it('omits the due date badge and description when absent', () => {
   expect(screen.queryByText(/\d{4}$/)).not.toBeInTheDocument()
 })
 
+it('offers to pin an unpinned task and forwards the request', async () => {
+  const { onPin, user } = setup(todoFixture)
+  const button = screen.getByRole('button', { name: `Pin: ${todoFixture.title}` })
+  expect(button).toHaveAttribute('aria-pressed', 'false')
+  await user.click(button)
+  expect(onPin).toHaveBeenCalledTimes(1)
+})
+
+it('offers to unpin a pinned task', async () => {
+  const { onPin, user } = setup({ ...todoFixture, pinned: true })
+  const button = screen.getByRole('button', { name: `Unpin: ${todoFixture.title}` })
+  expect(button).toHaveAttribute('aria-pressed', 'true')
+  await user.click(button)
+  expect(onPin).toHaveBeenCalledTimes(1)
+})
+
 it('disables all actions while busy', () => {
   setup(todoFixture, true)
+  expect(screen.getByRole('button', { name: `Pin: ${todoFixture.title}` })).toBeDisabled()
   expect(screen.getByRole('checkbox')).toBeDisabled()
   expect(screen.getByRole('button', { name: `Edit: ${todoFixture.title}` })).toBeDisabled()
   expect(screen.getByRole('button', { name: `Delete: ${todoFixture.title}` })).toBeDisabled()

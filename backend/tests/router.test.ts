@@ -23,7 +23,7 @@ it('creates tasks with trimmed input and defaults', async () => {
   const response = await request(app).post('/api/todos').send({ title: '  Plan the sprint  ', priority: 'high' });
   expect(response.status).toBe(201);
   expect(response.body).toEqual(todo);
-  expect(repository.create).toHaveBeenCalledWith({ title: 'Plan the sprint', description: '', priority: 'high', due_date: null, completed: false });
+  expect(repository.create).toHaveBeenCalledWith({ title: 'Plan the sprint', description: '', priority: 'high', due_date: null, completed: false, pinned: false });
 });
 it.each([{ title: '  ' }, { title: 'x'.repeat(121) }, { title: 'Task', priority: 'urgent' }, { title: 'Task', due_date: '2026-02-30' }])(
   'rejects invalid create input without calling the repository: %j', async (payload) => {

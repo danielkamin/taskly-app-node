@@ -44,6 +44,7 @@ describe('TodoForm', () => {
       priority: 'high',
       due_date: null,
       completed: false,
+      pinned: false,
     })
   })
 

@@ -8,6 +8,9 @@ it.each([false, true])('maps records to JSON without mutation (completed: %s)', 
   expect(fromModel(input)).toEqual({ ...todo, completed });
   expect(input).toEqual(before);
 });
+it('maps the pinned flag', () => {
+  expect(fromModel({ ...record, pinned: true }).pinned).toBe(true);
+});
 it('preserves an absent due date', () => {
   expect(fromModel({ ...record, due_date: null }).due_date).toBeNull();
 });
