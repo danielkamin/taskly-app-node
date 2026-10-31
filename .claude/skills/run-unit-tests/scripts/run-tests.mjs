@@ -29,7 +29,12 @@ const args = [vitest, 'run', '--reporter=json', `--outputFile=${report}`, ...rel
 const coverage = relative.length === 0;
 if (coverage) args.push('--coverage', '--coverage.reporter=json-summary', '--coverage.reporter=text');
 
-const run = spawnSync(process.execPath, args, { cwd: projectDir, encoding: 'utf8', timeout: 300_000, env: { ...process.env, CI: 'true' } });
+// Test code is untrusted (written by the PR author or the agent): it must not see API keys or tokens,
+// or it could print them into output the agent reads and reports. Pass through only what Node needs.
+const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+  /^(PATH|HOME|USERPROFILE|APPDATA|LOCALAPPDATA|SYSTEMROOT|COMSPEC|TEMP|TMP|TMPDIR|LANG|LC_\w+|TZ|NODE_OPTIONS|NODE_ENV)$/i.test(key)));
+env.CI = 'true';
+const run = spawnSync(process.execPath, args, { cwd: projectDir, encoding: 'utf8', timeout: 300_000, env });
 const json = existsSync(report) ? JSON.parse(readFileSync(report, 'utf8')) : null;
 rmSync(tmp, { recursive: true, force: true });
 
@@ -61,8 +66,8 @@ if (coverage) {
 }
 if (coverage) {
   // Vitest strips types without checking them; a test that passes can still break `tsc` (e.g. an outdated fixture).
-  const tsc = spawnSync(process.execPath, [path.join(projectDir, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', '.'], { cwd: projectDir, encoding: 'utf8', timeout: 300_000 });
-  result.typecheck = { ok: tsc.status === 0, errors: trim(tsc.stdout.split('\n').filter(Boolean).slice(0, 20).join('\n')) };
+  const tsc = spawnSync(process.execPath, [path.join(projectDir, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', '.'], { cwd: projectDir, encoding: 'utf8', timeout: 300_000, env });
+  result.typecheck = { ok: tsc.status === 0, errors: trim(tsc.stdout.split(/\r?\n/).filter(Boolean).slice(0, 20).join('\n')) };
   if (!result.typecheck.ok) result.ok = false;
 }
 // Non-zero exit without failed tests = threshold breach, timeout or crash: surface the log tail.
