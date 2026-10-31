@@ -9,6 +9,7 @@ const emptyTodo: TodoInput = {
   priority: 'medium',
   due_date: null,
   completed: false,
+  pinned: false,
 }
 
 export function TodoForm({

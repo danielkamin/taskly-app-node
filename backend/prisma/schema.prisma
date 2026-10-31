@@ -16,6 +16,7 @@ model Todo {
   priority    String    @default("medium") @db.VarChar(6)
   due_date    DateTime? @db.Date
   completed   Boolean   @default(false)
+  pinned      Boolean   @default(false)
   created_at  DateTime  @db.Timestamptz(6)
   updated_at  DateTime  @db.Timestamptz(6)
 

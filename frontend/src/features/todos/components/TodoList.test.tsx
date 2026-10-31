@@ -29,12 +29,14 @@ vi.mock('./TodoItem', () => ({
     todo,
     busy,
     onToggle,
+    onPin,
     onEdit,
     onDelete,
   }: {
     todo: Todo
     busy: boolean
     onToggle: () => void
+    onPin: () => void
     onEdit: () => void
     onDelete: () => void
   }) => (
@@ -43,6 +45,7 @@ vi.mock('./TodoItem', () => ({
       <button disabled={busy} onClick={onToggle}>
         Toggle {todo.title}
       </button>
+      <button onClick={onPin}>Pin {todo.title}</button>
       <button onClick={onEdit}>Edit {todo.title}</button>
       <button onClick={onDelete}>Delete {todo.title}</button>
     </li>
@@ -58,6 +61,7 @@ function setup(overrides: Partial<Parameters<typeof TodoList>[0]> = {}) {
     busy: false,
     onCreate: vi.fn(),
     onToggle: vi.fn(),
+    onPin: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
     ...overrides,
@@ -73,6 +77,7 @@ it('shows loading feedback before showing an empty list', () => {
     busy: false,
     onCreate: vi.fn(),
     onToggle: vi.fn(),
+    onPin: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
   }
@@ -110,6 +115,8 @@ it('renders each task and forwards actions with the task', async () => {
   expect(screen.getAllByRole('listitem')).toHaveLength(2)
   await user.click(screen.getByRole('button', { name: 'Toggle Second' }))
   expect(props.onToggle).toHaveBeenCalledWith(second)
+  await user.click(screen.getByRole('button', { name: 'Pin Second' }))
+  expect(props.onPin).toHaveBeenCalledWith(second)
   await user.click(
     screen.getByRole('button', { name: `Edit ${todoFixture.title}` }),
   )

@@ -6,6 +6,7 @@ const fields = {
   priority: z.enum(['low', 'medium', 'high']),
   due_date: z.iso.date().nullable(),
   completed: z.boolean(),
+  pinned: z.boolean(),
 };
 
 export const createSchema = z.strictObject({
@@ -14,6 +15,7 @@ export const createSchema = z.strictObject({
   priority: fields.priority.default('medium'),
   due_date: fields.due_date.default(null),
   completed: fields.completed.default(false),
+  pinned: fields.pinned.default(false),
 });
 export const updateSchema = z.strictObject(fields).partial().refine(
   (value) => Object.keys(value).length > 0,

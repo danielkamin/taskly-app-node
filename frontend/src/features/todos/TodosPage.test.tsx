@@ -43,6 +43,7 @@ vi.mock('./components/TodoList', () => ({
     busy: boolean
     onCreate: () => void
     onToggle: (todo: Todo) => void
+    onPin: (todo: Todo) => void
     onEdit: (todo: Todo) => void
     onDelete: (todo: Todo) => void
   }) => (
@@ -54,6 +55,7 @@ vi.mock('./components/TodoList', () => ({
       {props.todos.map((todo) => (
         <div key={todo.id}>
           <button onClick={() => props.onToggle(todo)}>Toggle {todo.title}</button>
+          <button onClick={() => props.onPin(todo)}>Pin {todo.title}</button>
           <button onClick={() => props.onEdit(todo)}>Edit {todo.title}</button>
           <button onClick={() => props.onDelete(todo)}>Delete {todo.title}</button>
         </div>
@@ -249,6 +251,45 @@ it.each([
     await waitFor(() => expect(notify).toHaveBeenCalledWith(notice))
   },
 )
+
+it.each([
+  { pinned: false, notice: 'Task pinned to the top.' },
+  { pinned: true, notice: 'Task unpinned.' },
+])(
+  'pins a task (pinned: $pinned) and notifies the result',
+  async ({ pinned, notice }) => {
+    const { mutateAsync, notify, user } = setup({
+      query: { data: [{ ...todoFixture, pinned }] },
+    })
+    mutateAsync.mockResolvedValue({ ...todoFixture, pinned: !pinned })
+    await user.click(
+      screen.getByRole('button', { name: `Pin ${todoFixture.title}` }),
+    )
+    expect(mutateAsync).toHaveBeenCalledWith({
+      id: todoFixture.id,
+      input: { pinned: !pinned },
+    })
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(notice))
+  },
+)
+
+it('does not notify when pinning fails', async () => {
+  const { mutateAsync, notify, user } = setup()
+  mutateAsync.mockRejectedValue(new Error('Pin failed.'))
+  await user.click(
+    screen.getByRole('button', { name: `Pin ${todoFixture.title}` }),
+  )
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalled())
+  expect(notify).not.toHaveBeenCalled()
+})
+
+it('ignores pin requests while another mutation is running', async () => {
+  const { mutateAsync, user } = setup({ busy: true })
+  await user.click(
+    screen.getByRole('button', { name: `Pin ${todoFixture.title}` }),
+  )
+  expect(mutateAsync).not.toHaveBeenCalled()
+})
 
 it('does not notify when toggling fails', async () => {
   const { mutateAsync, notify, user } = setup()

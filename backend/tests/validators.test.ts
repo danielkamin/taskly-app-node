@@ -5,11 +5,17 @@ import { todo } from './fixture.ts';
 describe('todo validation', () => {
   it('trims text and supplies create defaults', () => {
     expect(createSchema.parse({ title: '  Task  ' })).toEqual({
-      title: 'Task', description: '', priority: 'medium', due_date: null, completed: false,
+      title: 'Task', description: '', priority: 'medium', due_date: null, completed: false, pinned: false,
     });
   });
+  it('accepts pinned and rejects invalid pinned values', () => {
+    expect(createSchema.parse({ title: 'Task', pinned: true }).pinned).toBe(true);
+    expect(updateSchema.parse({ pinned: true })).toEqual({ pinned: true });
+    expect(createSchema.safeParse({ title: 'Task', pinned: 'yes' }).success).toBe(false);
+    expect(updateSchema.safeParse({ pinned: null }).success).toBe(false);
+  });
   it('accepts every input field and boundary lengths', () => {
-    const input = { title: 'x'.repeat(120), description: 'x'.repeat(2000), priority: 'low', due_date: '2024-02-29', completed: true };
+    const input = { title: 'x'.repeat(120), description: 'x'.repeat(2000), priority: 'low', due_date: '2024-02-29', completed: true, pinned: true };
     expect(createSchema.parse(input)).toEqual(input);
     expect(updateSchema.parse({ description: '  Details  ', title: '  Task  ', priority: 'high', completed: false, due_date: null }))
       .toEqual({ description: 'Details', title: 'Task', priority: 'high', completed: false, due_date: null });

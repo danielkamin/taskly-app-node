@@ -1,4 +1,4 @@
-import { CalendarDays, Pencil, Trash2 } from 'lucide-react'
+import { CalendarDays, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
 import type { Todo } from '../types'
 import { formatDate, isOverdue, priorityLabels } from '../utils/todos'
 import {
@@ -14,12 +14,14 @@ export function TodoItem({
   todo,
   busy,
   onToggle,
+  onPin,
   onEdit,
   onDelete,
 }: {
   todo: Todo
   busy: boolean
   onToggle: () => void
+  onPin: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -63,6 +65,19 @@ export function TodoItem({
               onChange={onToggle}
               aria-label={`${todo.completed ? 'Mark as active' : 'Complete'}: ${todo.title}`}
             />
+            <IconButton
+              variant="ghost"
+              disabled={busy}
+              onClick={onPin}
+              aria-pressed={todo.pinned}
+              aria-label={`${todo.pinned ? 'Unpin' : 'Pin'}: ${todo.title}`}
+            >
+              {todo.pinned ? (
+                <PinOff size={16} aria-hidden="true" />
+              ) : (
+                <Pin size={16} aria-hidden="true" />
+              )}
+            </IconButton>
             <IconButton
               variant="ghost"
               disabled={busy}

@@ -5,6 +5,7 @@ export interface TodoInput {
   priority: Priority
   due_date: string | null
   completed: boolean
+  pinned: boolean
 }
 export interface Todo extends TodoInput {
   id: number

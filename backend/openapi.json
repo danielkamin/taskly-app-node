@@ -192,6 +192,10 @@
           "completed": {
             "type": "boolean",
             "default": false
+          },
+          "pinned": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -224,6 +228,9 @@
           },
           "completed": {
             "type": "boolean"
+          },
+          "pinned": {
+            "type": "boolean"
           }
         }
       },
@@ -235,6 +242,7 @@
           "priority",
           "due_date",
           "completed",
+          "pinned",
           "id",
           "created_at",
           "updated_at"
@@ -266,6 +274,10 @@
             "default": null
           },
           "completed": {
+            "type": "boolean",
+            "default": false
+          },
+          "pinned": {
             "type": "boolean",
             "default": false
           },

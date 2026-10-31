@@ -43,6 +43,8 @@ export function selectTodos(
       )
     })
     .sort((a, b) => {
+      // Pinned tasks stay on top whatever the chosen sort.
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
       if (sort === 'priority')
         return (
           priorityOrder[a.priority] - priorityOrder[b.priority] || b.id - a.id
