@@ -30,7 +30,19 @@ const typeErrors = results.filter(({ r }) => r?.typecheck && !r.typecheck.ok)
 const logs = results.filter(({ r }) => r?.log).map(({ project, r }) => `<details><summary>${project} log</summary>\n\n\`\`\`\n${r.log}\n\`\`\`\n</details>`);
 
 // The report is LLM output: neutralize @mentions so it can never ping people.
-const report = read(path.join(AGENT_DIR, 'report.md')).replace(/@(?=[\w-])/g, '@​');
+const neutralize = (text) => text.replace(/@(?=[\w-])/g, '@​');
+const report = neutralize(read(path.join(AGENT_DIR, 'report.md')));
+const session = json(path.join(AGENT_DIR, 'summary.json'));
+const sessionLine = session?.finished
+  ? `${session.turns} turns · $${session.costUsd?.toFixed(2)} · ${Math.round((session.durationMs ?? 0) / 1000)} s · ${session.denials.length} permission denials`
+  : 'no session result';
+// Without a report, the agent's last message is the only explanation of what went wrong.
+const fallback = !report && session
+  ? [
+      `<details open><summary>Agent's final message</summary>\n\n${neutralize(session.finalMessage) || '_empty_'}\n</details>`,
+      ...(session.denials.length ? [`<details><summary>Permission denials (${session.denials.length})</summary>\n\n${session.denials.map((d) => `- \`${neutralize(d).replaceAll('`', "'")}\``).join('\n')}\n</details>`] : []),
+    ].join('\n')
+  : '_No agent report._';
 
 const body = [
   '<!-- test-agent-report -->',
@@ -47,9 +59,9 @@ const body = [
   '',
   `**Changed by the agent:** ${files.length ? files.map((f) => `\`${f.replace('\t', ' ')}\``).join(', ') : 'nothing'}`,
   '',
-  report ? `<details><summary>Agent report (decisions, notes)</summary>\n\n${report}\n</details>` : '_No agent report._',
+  report ? `<details><summary>Agent report (decisions, notes)</summary>\n\n${report}\n</details>` : fallback,
   '',
-  `<sub>[Workflow run](${RUN_URL}) · agent: \`test-engineer\` · skills: analyze-pr-changes, backend-unit-tests, frontend-unit-tests, run-unit-tests</sub>`,
+  `<sub>[Workflow run](${RUN_URL}) · agent: \`test-engineer\` (${sessionLine}) · skills: analyze-pr-changes, backend-unit-tests, frontend-unit-tests, run-unit-tests</sub>`,
 ].join('\n');
 
 // GitHub caps comment bodies at 65536 characters.
