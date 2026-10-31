@@ -116,7 +116,14 @@ jobs:
             --setting-sources project \
             --permission-mode dontAsk \
             --max-budget-usd 5 \
-            --output-format stream-json --verbose > .test-agent/session.jsonl
+            --output-format stream-json --verbose > .test-agent/session.jsonl || code=$?
+          node .github/test-agent/summarize-session.mjs .test-agent/session.jsonl .test-agent/summary.json
+          if [ -n "${code:-}" ]; then echo "::error::Claude Code exited with $code."; exit "$code"; fi
+          # Exit code 0 is not success: an agent blocked by permissions also exits cleanly. The report is the contract.
+          if [ ! -s .test-agent/report.md ]; then
+            echo "::error::The agent finished without writing .test-agent/report.md."
+            exit 1
+          fi
       - name: Collect agent changes as a patch
         if: always()
         run: |
