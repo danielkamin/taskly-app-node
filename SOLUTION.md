@@ -148,7 +148,9 @@ The bot commit `7610ddb` contains only test files: 13 files, +135/−8. The four
 
 ### Bug found during the coverage run
 
-In `backend/src/core/lifespan.ts`, Express 5's `app.listen` passes `EADDRINUSE` to its callback instead of emitting `'error'`. As a result `start()` resolved with an unbound server and then threw `TypeError: Cannot read properties of null`, so the real error was lost. Following its rules, the agent did not touch the source. It removed only its `toThrow(/EADDRINUSE/)` assertion and reported the suspected bug, which was then confirmed with a minimal reproduction. The fix comes in a separate PR (`fix/listen-error`). That PR leaves the weakened test untouched on purpose, so the PR workflow can tighten it.
+In `backend/src/core/lifespan.ts`, Express 5's `app.listen` passes `EADDRINUSE` to its callback instead of emitting `'error'`. As a result `start()` resolved with an unbound server and then threw `TypeError: Cannot read properties of null`, so the real error was lost. Following its rules, the agent did not touch the source. It removed only its `toThrow(/EADDRINUSE/)` assertion and reported the suspected bug, which was then confirmed with a minimal reproduction. The fix came in PR #5, which changed only the source and left the weakened test untouched on purpose.
+
+**The PR workflow closed the loop** ([workflow run](https://github.com/danielkamin/taskly-app-node/actions/runs/41227543555)). It took 14 turns, $0.06 and 16 s, with 0 permission denials. The agent decided "updated" with the reason *"listen errors now come via the callback; the port-in-use test now asserts the real EADDRINUSE error instead of any throw"*. In bot commit `090e465` it replaced `rejects.toThrow()` with the stricter `rejects.toMatchObject({ code: 'EADDRINUSE' })` and removed the stale "suspected bug" comment. Backend: 94/94 tests, `tsc` ✓. So the agent first found the bug and, after the fix, tightened the test that guards it.
 
 ## Assumptions
 
