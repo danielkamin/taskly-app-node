@@ -110,7 +110,6 @@ it('disconnects and rethrows when the port cannot be bound', async () => {
   servers.push(first.server);
   vi.stubEnv('API_PORT', String((first.server.address() as AddressInfo).port));
   database.$disconnect.mockClear();
-  // Suspected bug: Express 5 calls the listen callback on 'error', so the EADDRINUSE error is masked by a TypeError.
-  await expect(start()).rejects.toThrow();
+  await expect(start()).rejects.toMatchObject({ code: 'EADDRINUSE' });
   expect(database.$disconnect).toHaveBeenCalledOnce();
 });

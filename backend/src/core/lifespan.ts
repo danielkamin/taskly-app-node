@@ -11,8 +11,8 @@ export async function start() {
     await initialize(database);
     const app = createApp(database);
     const server = await new Promise<Server>((resolve, reject) => {
-      const listener = app.listen(Number(process.env.API_PORT || 8000), '0.0.0.0', () => resolve(listener));
-      listener.once('error', reject);
+      // Express 5 passes listen errors (e.g. EADDRINUSE) to this callback instead of leaving them to 'error'.
+      const listener = app.listen(Number(process.env.API_PORT || 8000), '0.0.0.0', (error) => (error ? reject(error) : resolve(listener)));
     });
     console.log(`Taskly App Node API listening on port ${(server.address() as AddressInfo).port}`);
     const shutdown = () => {
